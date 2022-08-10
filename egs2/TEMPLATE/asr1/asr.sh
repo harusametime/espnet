@@ -38,6 +38,7 @@ gpu_inference=false  # Whether to perform gpu decoding.
 dumpdir=dump         # Directory to dump features.
 expdir=exp           # Directory to save experiments.
 python=python3       # Specify python to execute espnet commands.
+sagemaker_train_config= # Speciify config of Sagemaker Training Job
 
 # Data preparation related
 local_data_opts= # The options given to local/data.sh.
@@ -164,6 +165,7 @@ Options:
     --dumpdir        # Directory to dump features (default="${dumpdir}").
     --expdir         # Directory to save experiments (default="${expdir}").
     --python         # Specify python to execute espnet commands (default="${python}").
+    --sagemaker_train_config # Speciify config of Sagemaker Training Job
 
     # Data preparation related
     --local_data_opts # The options given to local/data.sh (default="${local_data_opts}").
