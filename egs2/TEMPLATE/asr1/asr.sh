@@ -855,7 +855,8 @@ if ! "${skip_train}"; then
                 --ngpu "${ngpu}" \
                 --num_nodes "${num_nodes}" \
                 --init_file_prefix "${lm_exp}"/.dist_init_ \
-                --multiprocessing_distributed true -- \
+                --multiprocessing_distributed true \
+                --sagemaker_train_config "${sagemaker_train_config}" -- \
                 ${python} -m espnet2.bin.lm_train \
                     --ngpu "${ngpu}" \
                     --use_preprocessor true \
