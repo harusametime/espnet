@@ -84,6 +84,13 @@ def get_parser():
         "'Shared-file system initialization'. "
         "This option is used when --port is not specified",
     )
+    parser.add_argument(
+        "--sagemaker_train_config",
+        type=str,
+        default=None,
+        help="Specify SageMaker instance type and counts."
+        "If specified, SageMaker instances automatically spin up."
+    )
     parser.add_argument("args", type=str, nargs="+")
     return parser
 
@@ -96,6 +103,66 @@ def main(cmd=None):
     parser = get_parser()
     args = parser.parse_args(cmd)
     args.cmd = shlex.split(args.cmd)
+
+
+    if args.sagemaker_train_config is not None:
+
+        '''
+        INFO: /opt/conda/bin/python3 /root/sagemaker-espnet-studio/espnet/espnet2/bin/launch.py --cmd 'run.pl --name exp/lm_train_lm_en_bpe30/train.log' --log exp/lm_train_lm_en_bpe30/train.log --ngpu 1 --num_nodes 1 --init_file_prefix exp/lm_train_lm_en_bpe30/.dist_init_ --multiprocessing_distributed true --sagemaker_train_config conf/train_sagemaker.yaml -- python3 -m espnet2.bin.lm_train --ngpu 1 --use_preprocessor true
+
+        --bpemodel data/en_token_list/bpe_unigram30/bpe.model
+        --token_type bpe
+        --token_list data/en_token_list/bpe_unigram30/tokens.txt
+        --non_linguistic_symbols none
+        --cleaner none --g2p none
+        --valid_data_path_and_name_and_type dump/raw/train_dev/text,text,text
+        --valid_shape_file exp/lm_stats_en_bpe30/valid/text_shape.bpe
+        --fold_length 150 --resume true
+        --output_dir exp/lm_train_lm_en_bpe30 --config conf/train_lm.yaml --train_data_path_and_name_and_type dump/raw/lm_train.txt,text,text --train_shape_file exp/lm_stats_en_bpe30/train/text_shape.bpe
+        '''
+        import sagemaker
+        import yaml
+        try:
+            with open(args.sagemaker_train_config) as file:
+                sagemaker_config = yaml.safe_load(file)
+        except Exception as e:
+            print('Exception occurred while loading YAML...', file=sys.stderr)
+            print(e, file=sys.stderr)
+            sys.exit(1)
+
+        '''
+        Upload directories to S3
+        ./data: model, vocab, token_list
+        ./exp: log and shape file
+        ./dump: data for training/validation
+        '''
+
+        sagemaker_session = sagemaker.Session()
+        s3_root = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'])
+        s3_data = os.path.join(s3_root,'data')
+        s3_exp = os.path.join(s3_root,'exp')
+        s3_dump = os.path.join(s3_root,'dump')
+
+
+        print('Uploading files to S3 ... (This takes a while)')
+        s3_data = sagemaker_session.upload_data(path='data', \
+                                                bucket=sagemaker_config['s3_bucket'], \
+                                                key_prefix=os.path.join(sagemaker_config['key_prefix'], 'data'))
+        s3_exp = sagemaker_session.upload_data(path='exp', \
+                                                bucket=sagemaker_config['s3_bucket'], \
+                                                key_prefix=os.path.join(sagemaker_config['key_prefix'], 'exp'))
+        s3_dump = sagemaker_session.upload_data(path='dump', \
+                                                bucket=sagemaker_config['s3_bucket'], \
+                                                key_prefix=os.path.join(sagemaker_config['key_prefix'], 'dump'))
+
+        print('File uploaded to')
+        print('    ' + s3_data)
+        print('    ' + s3_exp)
+        print('    ' + s3_dump)
+        # If you use SageMaker for training, all is done in Sagemaker.
+        # Return to the main shell script (such as asr.sh), without running later steps.
+        return
+
 
     if args.host is None and shutil.which(args.cmd[0]) is None:
         raise RuntimeError(
