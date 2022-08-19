@@ -158,8 +158,8 @@ def main(cmd=None):
         print('    ' + s3_dump)
 
         estimator = PyTorch(
-            image_uri=agemaker_config['image_uri'],
-            entry_point=agemaker_config['entry_point'],
+            image_uri=sagemaker_config['image_uri'],
+            entry_point=sagemaker_config['entry_point'],
             source_dir=sagemaker_config['source_dir'],
             role=sagemaker_config['role'],
             py_version="py38",
