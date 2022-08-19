@@ -121,12 +121,13 @@ def main(cmd=None):
         --output_dir exp/lm_train_lm_en_bpe30 --config conf/train_lm.yaml --train_data_path_and_name_and_type dump/raw/lm_train.txt,text,text --train_shape_file exp/lm_stats_en_bpe30/train/text_shape.bpe
         '''
         import sagemaker
+        from sagemaker.pytorch import PyTorch
         import yaml
         try:
             with open(args.sagemaker_train_config) as file:
                 sagemaker_config = yaml.safe_load(file)
         except Exception as e:
-            print('Exception occurred while loading YAML...', file=sys.stderr)
+            print(f'Error in loading the file: {args.sagemaker_train_config}', file=sys.stderr)
             print(e, file=sys.stderr)
             sys.exit(1)
 
@@ -138,12 +139,6 @@ def main(cmd=None):
         '''
 
         sagemaker_session = sagemaker.Session()
-        s3_root = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'])
-        s3_data = os.path.join(s3_root,'data')
-        s3_exp = os.path.join(s3_root,'exp')
-        s3_dump = os.path.join(s3_root,'dump')
-
-
         print('Uploading files to S3 ... (This takes a while)')
         s3_data = sagemaker_session.upload_data(path='data', \
                                                 bucket=sagemaker_config['s3_bucket'], \
@@ -155,10 +150,29 @@ def main(cmd=None):
                                                 bucket=sagemaker_config['s3_bucket'], \
                                                 key_prefix=os.path.join(sagemaker_config['key_prefix'], 'dump'))
 
+
+
         print('File uploaded to')
         print('    ' + s3_data)
         print('    ' + s3_exp)
         print('    ' + s3_dump)
+
+        estimator = PyTorch(
+            image_uri=agemaker_config['image_uri'],
+            entry_point=agemaker_config['entry_point'],
+            source_dir=sagemaker_config['source_dir'],
+            role=sagemaker_config['role'],
+            py_version="py38",
+            framework_version="1.11.0",
+            train_instance_count=sagemaker_config['train_instance_count'],
+            train_instance_type=sagemaker_config['train_instance_type'],
+            hyperparameters={"epochs": 1,
+                             "backend": "gloo"},
+        )
+
+        estimator.fit(s3_data)
+
+
         # If you use SageMaker for training, all is done in Sagemaker.
         # Return to the main shell script (such as asr.sh), without running later steps.
         return
