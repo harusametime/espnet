@@ -139,35 +139,44 @@ def main(cmd=None):
         '''
 
         sagemaker_session = sagemaker.Session()
-        print('Uploading files to S3 ... (This takes a while)')
-        s3_data = sagemaker_session.upload_data(path='data', \
-                                                bucket=sagemaker_config['s3_bucket'], \
-                                                key_prefix=os.path.join(sagemaker_config['key_prefix'], 'data'))
-        s3_exp = sagemaker_session.upload_data(path='exp', \
-                                                bucket=sagemaker_config['s3_bucket'], \
-                                                key_prefix=os.path.join(sagemaker_config['key_prefix'], 'exp'))
-        s3_dump = sagemaker_session.upload_data(path='dump', \
-                                                bucket=sagemaker_config['s3_bucket'], \
-                                                key_prefix=os.path.join(sagemaker_config['key_prefix'], 'dump'))
 
+        if sagemaker_config['data_upload']:
+            print('Uploading files to S3 ... (This takes a while)')
+            s3_data = sagemaker_session.upload_data(path='data', \
+                                                    bucket=sagemaker_config['s3_bucket'], \
+                                                    key_prefix=os.path.join(sagemaker_config['key_prefix'], 'data'))
+            s3_exp = sagemaker_session.upload_data(path='exp', \
+                                                    bucket=sagemaker_config['s3_bucket'], \
+                                                    key_prefix=os.path.join(sagemaker_config['key_prefix'], 'exp'))
+            s3_dump = sagemaker_session.upload_data(path='dump', \
+                                                    bucket=sagemaker_config['s3_bucket'], \
+                                                    key_prefix=os.path.join(sagemaker_config['key_prefix'], 'dump'))
 
+            print('File uploaded to')
+            print('    ' + s3_data)
+            print('    ' + s3_exp)
+            print('    ' + s3_dump)
+        else:
+            s3_data = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'data')
+            s3_exp = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'exp')
+            s3_dump = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'dump')
 
-        print('File uploaded to')
-        print('    ' + s3_data)
-        print('    ' + s3_exp)
-        print('    ' + s3_dump)
-
+            print('Re-use data in')
+            print('    ' + s3_data)
+            print('    ' + s3_exp)
+            print('    ' + s3_dump)
+        # The first three args ['python3', '-m', 'espnet2.bin.lm_train']
+        # are not needed for SageMaker, which runs python instead of passing the args.
         estimator = PyTorch(
             image_uri=sagemaker_config['image_uri'],
             entry_point=sagemaker_config['entry_point'],
-            source_dir=sagemaker_config['source_dir'],
+            #source_dir=sagemaker_config['source_dir'],
             role=sagemaker_config['role'],
             py_version="py38",
             framework_version="1.11.0",
-            train_instance_count=sagemaker_config['train_instance_count'],
-            train_instance_type=sagemaker_config['train_instance_type'],
-            hyperparameters={"epochs": 1,
-                             "backend": "gloo"},
+            instance_count=sagemaker_config['train_instance_count'],
+            instance_type=sagemaker_config['train_instance_type'],
+            hyperparameters={"cmd": args.args[3:]},
         )
 
         estimator.fit(s3_data)

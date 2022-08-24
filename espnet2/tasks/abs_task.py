@@ -1001,7 +1001,10 @@ class AbsTask(ABC):
     @classmethod
     def main(cls, args: argparse.Namespace = None, cmd: Sequence[str] = None):
         assert check_argument_types()
-        print(get_commandline_args(), file=sys.stderr)
+
+        # Sagemakerの処理をおかく
+
+
         if args is None:
             parser = cls.get_parser()
             args = parser.parse_args(cmd)
@@ -1012,9 +1015,11 @@ class AbsTask(ABC):
             cls.print_config()
             sys.exit(0)
         cls.check_required_command_args(args)
-
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
+
+
+        print("test: new docker")
         if not args.distributed or not args.multiprocessing_distributed:
             cls.main_worker(args)
 
