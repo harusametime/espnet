@@ -1002,8 +1002,12 @@ class AbsTask(ABC):
     def main(cls, args: argparse.Namespace = None, cmd: Sequence[str] = None):
         assert check_argument_types()
 
-        # Sagemakerの処理をおかく
-
+        On_sagemaker = False
+        if cmd is not None:
+            if cmd[-1] == "sagemaker":
+                On_sagemaker = True
+                cmd = cmd[:-1]
+                print(f"cmd for sagemaker: {cmd}")
 
         if args is None:
             parser = cls.get_parser()
@@ -1018,9 +1022,19 @@ class AbsTask(ABC):
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
 
+        if On_sagemaker == True:
+            # いくつかパラメーたをいじる必要あり
 
-        print("test: new docker")
-        if not args.distributed or not args.multiprocessing_distributed:
+            local_args = argparse.Namespace(**vars(args))
+
+            local_args.local_rank = i
+            local_args.dist_rank = args.ngpu * node_rank + i
+            local_args.ngpu = 1  #data load に使われる
+
+            cls.main_worker(local_args)
+
+
+        elif not args.distributed or not args.multiprocessing_distributed:
             cls.main_worker(args)
 
         else:
