@@ -1030,13 +1030,11 @@ class AbsTask(ABC):
         resolve_distributed_mode(args)
 
         if On_sagemaker == True:
-            # いくつかパラメーたをいじる必要あり
 
             local_args = argparse.Namespace(**vars(args))
-
-            local_args.local_rank = i
-            local_args.dist_rank = args.ngpu * node_rank + i
-            local_args.ngpu = 1  #data load に使われる
+            local_args.local_rank = os.environ["LOCAL_RANK"]
+            local_args.dist_rank = torch.distributed.get_rank()
+            local_args.ngpu = int(os.environ['SM_NUM_GPUS']) #1
 
             cls.main_worker(local_args)
 
