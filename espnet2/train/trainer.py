@@ -82,6 +82,7 @@ class TrainerOptions:
     unused_parameters: bool
     wandb_model_log_interval: int
     create_graph_in_tensorboard: bool
+    s3_output: str
 
 
 class Trainer:
@@ -258,6 +259,15 @@ class Trainer:
         else:
             train_summary_writer = None
 
+        # create sagemaker session and parse bucker_name and key for uploading checkpoint to S3
+        if trainer_options.s3_output is not None:
+            import sagemaker
+            from urllib.parse import urlparse
+            sagemaker_session = sagemaker.Session()
+            parsed = urlparse(trainer_options.s3_output)
+            s3_output_bucket = parsed.netloc
+            s3_output_key = parsed.path.lstrip('/')
+
         start_time = time.perf_counter()
         for iepoch in range(start_epoch, trainer_options.max_epoch + 1):
             if iepoch != start_epoch:
@@ -353,6 +363,10 @@ class Trainer:
 
                 # 5. Save and log the model and update the link to the best model
                 torch.save(model.state_dict(), output_dir / f"{iepoch}epoch.pth")
+
+                # If s3 output bucker is specified, the output dir is uploaded to S3
+                if trainer_options.s3_output is not None:
+                    sagemaker_session.upload_data(output_dir, bucket=s3_output_bucket, key_prefix=s3_output_key)
 
                 # Creates a sym link latest.pth -> {iepoch}epoch.pth
                 p = output_dir / "latest.pth"
