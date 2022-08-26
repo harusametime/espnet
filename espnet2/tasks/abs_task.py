@@ -1032,7 +1032,7 @@ class AbsTask(ABC):
         if On_sagemaker == True:
 
             local_args = argparse.Namespace(**vars(args))
-            local_args.local_rank = os.environ["LOCAL_RANK"]
+            local_args.local_rank = torch.distributed.get_local_rank()
             local_args.dist_rank = torch.distributed.get_rank()
             local_args.ngpu = int(os.environ['SM_NUM_GPUS']) #1
 
