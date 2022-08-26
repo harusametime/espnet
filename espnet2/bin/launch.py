@@ -151,22 +151,34 @@ def main(cmd=None):
             s3_dump = sagemaker_session.upload_data(path='dump', \
                                                     bucket=sagemaker_config['s3_bucket'], \
                                                     key_prefix=os.path.join(sagemaker_config['key_prefix'], 'dump'))
+            s3_conf = sagemaker_session.upload_data(path='conf', \
+                                                    bucket=sagemaker_config['s3_bucket'], \
+                                                    key_prefix=os.path.join(sagemaker_config['key_prefix'], 'conf'))
 
             print('File uploaded to')
             print('    ' + s3_data)
             print('    ' + s3_exp)
             print('    ' + s3_dump)
+            print('    ' + s3_conf)
         else:
             s3_data = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'data')
             s3_exp = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'exp')
             s3_dump = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'dump')
+            s3_conf = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'conf')
 
             print('Re-use data in')
             print('    ' + s3_data)
             print('    ' + s3_exp)
             print('    ' + s3_dump)
+            print('    ' + s3_conf)
+
+        ## exp directory stores shape files and will store trained model as outcome of training
+        ## During training, files under exp directory should be uploaded back to exp directory in S3
+        # here added s3_output_path for uploading the file
+        args.args.extend(["s3_output", s3_exp])
+
         # The first three args ['python3', '-m', 'espnet2.bin.lm_train']
-        # are not needed for SageMaker, which runs python instead of passing the args.
+        # are not needed for SageMaker, which runs python instead of passing the args. 
         estimator = PyTorch(
             image_uri=sagemaker_config['image_uri'],
             entry_point=sagemaker_config['entry_point'],
@@ -176,14 +188,11 @@ def main(cmd=None):
             framework_version="1.11.0",
             instance_count=sagemaker_config['train_instance_count'],
             instance_type=sagemaker_config['train_instance_type'],
-            hyperparameters={"cmd": args.args[3:]},
+            hyperparameters={"cmd": '"'+str(args.args[3:])+'"'},
         )
 
-        estimator.fit(s3_data)
+        estimator.fit({'data':s3_data, 'exp': s3_exp, 'dump': s3_dump, 'conf': s3_conf})
 
-
-        # If you use SageMaker for training, all is done in Sagemaker.
-        # Return to the main shell script (such as asr.sh), without running later steps.
         return
 
 
