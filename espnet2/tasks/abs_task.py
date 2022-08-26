@@ -1030,10 +1030,11 @@ class AbsTask(ABC):
         resolve_distributed_mode(args)
 
         if On_sagemaker == True:
+            simport smdistributed.dataparallel.torch.distributed as dist
 
             local_args = argparse.Namespace(**vars(args))
-            local_args.local_rank = torch.distributed.get_local_rank()
-            local_args.dist_rank = torch.distributed.get_rank()
+            local_args.local_rank = dist.get_local_rank()
+            local_args.dist_rank = dist.distributed.get_rank()
             local_args.ngpu = int(os.environ['SM_NUM_GPUS']) #1
 
             cls.main_worker(local_args)
