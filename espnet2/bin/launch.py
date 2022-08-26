@@ -178,7 +178,11 @@ def main(cmd=None):
         args.args.extend(["s3_output", s3_exp])
 
         # The first three args ['python3', '-m', 'espnet2.bin.lm_train']
-        # are not needed for SageMaker, which runs python instead of passing the args. 
+        # are not needed for SageMaker, which runs python instead of passing the args.
+
+        entry_point = args.args[2].split('.')[-1] +'.py'
+
+
         estimator = PyTorch(
             image_uri=sagemaker_config['image_uri'],
             entry_point=sagemaker_config['entry_point'],
