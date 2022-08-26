@@ -32,11 +32,10 @@ def main(cmd=None):
         # SageMaker downloads data in /opt/ml/input/, but espnet assumes the data
         # in current directory. Create symblic link to /opt/ml/input/, which can be
         # known from evnrionment variables
-        print(os.listdir('.'))
-        os.symlink(os.environ['SM_CHANNEL_DATA'], ".")
-        os.symlink(os.environ['SM_CHANNEL_EXP'], ".")
-        os.symlink(os.environ['SM_CHANNEL_DUMP'], ".")
-        os.symlink(os.environ['SM_CHANNEL_CONF'], ".")
+        os.symlink(os.environ['SM_CHANNEL_DATA'], "data")
+        os.symlink(os.environ['SM_CHANNEL_EXP'], "exp")
+        os.symlink(os.environ['SM_CHANNEL_DUMP'], "dump")
+        os.symlink(os.environ['SM_CHANNEL_CONF'], "conf")
 
         LMTask.main(cmd=cmd)
     else:
