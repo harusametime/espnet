@@ -1030,7 +1030,7 @@ class AbsTask(ABC):
         resolve_distributed_mode(args)
 
         if On_sagemaker == True:
-            simport smdistributed.dataparallel.torch.distributed as dist
+            import smdistributed.dataparallel.torch.distributed as dist
 
             local_args = argparse.Namespace(**vars(args))
             local_args.local_rank = dist.get_local_rank()
