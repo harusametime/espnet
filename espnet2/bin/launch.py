@@ -172,17 +172,25 @@ def main(cmd=None):
             print('    ' + s3_dump)
             print('    ' + s3_conf)
 
+
+#         ##debug##
+#         from espnet2.tasks.lm import LMTask
+#         LMTask.main(cmd=args.args[3:])
+#         sye.exit()
+
         ## exp directory stores shape files and will store trained model as outcome of training
         ## During training, files under exp directory should be uploaded back to exp directory in S3
         # here added s3_output_path for uploading the file
-        args.args.extend(["s3_output", s3_exp])
+        args.args.extend(["--s3_output", s3_exp])
+
+        # launch.py receives entrypoint the third item of the args list
+        #  ['python3', '-m', 'espnet2.bin.lm_train']
+        # Extracting the third element and concatenating it with the absolute path
+        entry_point_dir = os.path.dirname(os.path.abspath(__file__))
+        entry_point = os.path.join(entry_point_dir, args.args[2].split('.')[-1] +'.py')
 
         # The first three args ['python3', '-m', 'espnet2.bin.lm_train']
         # are not needed for SageMaker, which runs python instead of passing the args.
-
-        entry_point = args.args[2].split('.')[-1] +'.py'
-
-
         estimator = PyTorch(
             image_uri=sagemaker_config['image_uri'],
             entry_point=sagemaker_config['entry_point'],
