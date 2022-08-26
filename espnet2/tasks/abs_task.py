@@ -307,6 +307,7 @@ class AbsTask(ABC):
         )
 
         group.add_argument("--output_dir", type=str_or_none, default=None)
+        group.add_argument("--s3_output", type=str_or_none, default=None)
         group.add_argument(
             "--ngpu",
             type=int,
@@ -1003,6 +1004,8 @@ class AbsTask(ABC):
         assert check_argument_types()
 
         On_sagemaker = False
+
+        print(f"cmd: {cmd}")
         if cmd is not None:
             if cmd[-1] == "sagemaker":
                 On_sagemaker = True
@@ -1012,6 +1015,8 @@ class AbsTask(ABC):
         if args is None:
             parser = cls.get_parser()
             args = parser.parse_args(cmd)
+
+        print(f"parsed_args: {args}")
         args.version = __version__
         if args.pretrain_path is not None:
             raise RuntimeError("--pretrain_path is deprecated. Use --init_param")
@@ -1019,6 +1024,8 @@ class AbsTask(ABC):
             cls.print_config()
             sys.exit(0)
         cls.check_required_command_args(args)
+
+        print(f"pass")
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
 
