@@ -1107,7 +1107,7 @@ class AbsTask(ABC):
     def main_worker(cls, args: argparse.Namespace):
 
         On_sagemaker = False
-        if args[-1] == "sagemaker":
+        if args.args[-1] == "sagemaker":
             On_sagemaker = True
             args = args[:-1]
 
