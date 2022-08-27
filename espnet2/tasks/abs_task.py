@@ -1029,18 +1029,17 @@ class AbsTask(ABC):
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
 
-        if On_sagemaker == True:
-            import smdistributed.dataparallel.torch.distributed as dist
+            # import smdistributed.dataparallel.torch.distributed as dist
+            #
+            # local_args = argparse.Namespace(**vars(args))
+            # local_args.local_rank = dist.get_local_rank()
+            # local_args.dist_rank = dist.distributed.get_rank()
+            # local_args.ngpu = int(os.environ['SM_NUM_GPUS']) #1
+            #
+            # cls.main_worker(local_args)
 
-            local_args = argparse.Namespace(**vars(args))
-            local_args.local_rank = dist.get_local_rank()
-            local_args.dist_rank = dist.distributed.get_rank()
-            local_args.ngpu = int(os.environ['SM_NUM_GPUS']) #1
 
-            cls.main_worker(local_args)
-
-
-        elif not args.distributed or not args.multiprocessing_distributed:
+        if not args.distributed or not args.multiprocessing_distributed:
             cls.main_worker(args)
 
         else:
@@ -1051,51 +1050,67 @@ class AbsTask(ABC):
             # |Child1|Child2|Child1|Child2|
             # |GPU1  |GPU2  |GPU1  |GPU2  |
 
-            # See also the following usage of --multiprocessing-distributed:
-            # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-            num_nodes = get_num_nodes(args.dist_world_size, args.dist_launcher)
-            if num_nodes == 1:
-                args.dist_master_addr = "localhost"
-                args.dist_rank = 0
-                # Single node distributed training with multi-GPUs
-                if (
-                    args.dist_init_method == "env://"
-                    and get_master_port(args.dist_master_port) is None
-                ):
-                    # Get the unused port
-                    args.dist_master_port = free_port()
-
-            # Assume that nodes use same number of GPUs each other
-            args.dist_world_size = args.ngpu * num_nodes
-            node_rank = get_node_rank(args.dist_rank, args.dist_launcher)
-
-            # The following block is copied from:
-            # https://github.com/pytorch/pytorch/blob/master/torch/multiprocessing/spawn.py
-            error_queues = []
-            processes = []
-            mp = torch.multiprocessing.get_context("spawn")
-            for i in range(args.ngpu):
-                # Copy args
+            # ---- sagemaker distributed training ----
+            if On_sagemaker:
+                import smdistributed.dataparallel.torch.distributed as dist
                 local_args = argparse.Namespace(**vars(args))
+                local_args.local_rank = dist.get_local_rank()
+                local_args.dist_rank = dist.distributed.get_rank()
+                local_args.ngpu = int(os.environ['SM_NUM_GPUS'])
+                cls.main_worker(local_args)
 
-                local_args.local_rank = i
-                local_args.dist_rank = args.ngpu * node_rank + i
-                local_args.ngpu = 1
+            else:
+                # See also the following usage of --multiprocessing-distributed:
+                # https://github.com/pytorch/examples/blob/master/imagenet/main.py
+                num_nodes = get_num_nodes(args.dist_world_size, args.dist_launcher)
+                if num_nodes == 1:
+                    args.dist_master_addr = "localhost"
+                    args.dist_rank = 0
+                    # Single node distributed training with multi-GPUs
+                    if (
+                        args.dist_init_method == "env://"
+                        and get_master_port(args.dist_master_port) is None
+                    ):
+                        # Get the unused port
+                        args.dist_master_port = free_port()
 
-                process = mp.Process(
-                    target=cls.main_worker,
-                    args=(local_args,),
-                    daemon=False,
-                )
-                process.start()
-                processes.append(process)
-                error_queues.append(mp.SimpleQueue())
-            # Loop on join until it returns True or raises an exception.
-            while not ProcessContext(processes, error_queues).join():
-                pass
+                # Assume that nodes use same number of GPUs each other
+                args.dist_world_size = args.ngpu * num_nodes
+                node_rank = get_node_rank(args.dist_rank, args.dist_launcher)
+
+                # The following block is copied from:
+                # https://github.com/pytorch/pytorch/blob/master/torch/multiprocessing/spawn.py
+                error_queues = []
+                processes = []
+                mp = torch.multiprocessing.get_context("spawn")
+                for i in range(args.ngpu):
+                    # Copy args
+                    local_args = argparse.Namespace(**vars(args))
+
+                    local_args.local_rank = i
+                    local_args.dist_rank = args.ngpu * node_rank + i
+                    local_args.ngpu = 1
+
+                    process = mp.Process(
+                        target=cls.main_worker,
+                        args=(local_args,),
+                        daemon=False,
+                    )
+                    process.start()
+                    processes.append(process)
+                    error_queues.append(mp.SimpleQueue())
+                # Loop on join until it returns True or raises an exception.
+                while not ProcessContext(processes, error_queues).join():
+                    pass
 
     @classmethod
     def main_worker(cls, args: argparse.Namespace):
+
+        On_sagemaker = False
+        if args[-1] == "sagemaker":
+            On_sagemaker = True
+            args = args[:-1]
+
         assert check_argument_types()
 
         # 0. Init distributed process
@@ -1130,8 +1145,14 @@ class AbsTask(ABC):
                 f":{distributed_option.dist_rank}/{distributed_option.dist_world_size}]"
                 f" %(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s",
             )
+
         # Invoking torch.distributed.init_process_group
-        distributed_option.init_torch_distributed()
+        # If it is on sagemaker, initialize it by smddp
+        if On_sagemaker:
+            import smdistributed.dataparallel.torch.torch_smddp
+            torch.distributed.init_process_group(backend='smddp')
+        else:
+            distributed_option.init_torch_distributed()
 
         # 1. Set random-seed
         set_all_random_seed(args.seed)
