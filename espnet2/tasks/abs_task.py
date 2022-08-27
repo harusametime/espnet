@@ -1057,6 +1057,7 @@ class AbsTask(ABC):
                 local_args.local_rank = dist.get_local_rank()
                 local_args.dist_rank = dist.distributed.get_rank()
                 local_args.ngpu = int(os.environ['SM_NUM_GPUS'])
+                local_args.sagemaker = True
                 cls.main_worker(local_args)
 
             else:
@@ -1106,11 +1107,6 @@ class AbsTask(ABC):
     @classmethod
     def main_worker(cls, args: argparse.Namespace):
 
-        On_sagemaker = False
-        if args.args[-1] == "sagemaker":
-            On_sagemaker = True
-            args = args[:-1]
-
         assert check_argument_types()
 
         # 0. Init distributed process
@@ -1148,7 +1144,7 @@ class AbsTask(ABC):
 
         # Invoking torch.distributed.init_process_group
         # If it is on sagemaker, initialize it by smddp
-        if On_sagemaker:
+        if hasattr(args, "sagemaker"):
             import smdistributed.dataparallel.torch.torch_smddp
             torch.distributed.init_process_group(backend='smddp')
         else:
