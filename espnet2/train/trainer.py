@@ -366,6 +366,8 @@ class Trainer:
 
                 # If s3 output bucker is specified, the output dir is uploaded to S3
                 if trainer_options.s3_output is not None:
+
+                    print(output_dir,s3_output_bucket, s3_output_key)
                     sagemaker_session.upload_data(output_dir, bucket=s3_output_bucket, key_prefix=s3_output_key)
 
                 # Creates a sym link latest.pth -> {iepoch}epoch.pth
