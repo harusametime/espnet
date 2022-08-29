@@ -472,10 +472,10 @@ class Trainer:
 
         # If s3 output bucket is specified, the output dir is uploaded to S3
         if trainer_options.s3_output is not None:
-
+            import os
             s3_dist_path = sagemaker_session.upload_data(output_dir, bucket=s3_output_bucket, key_prefix=output_dir)
             print(f"data uploaded from {os.listdir(output_dir)} to {s3_dist_path }")
-            
+
     @classmethod
     def train_one_epoch(
         cls,
