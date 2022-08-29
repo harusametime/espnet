@@ -364,12 +364,6 @@ class Trainer:
                 # 5. Save and log the model and update the link to the best model
                 torch.save(model.state_dict(), output_dir / f"{iepoch}epoch.pth")
 
-                # If s3 output bucker is specified, the output dir is uploaded to S3
-                if trainer_options.s3_output is not None:
-
-                    print(output_dir,s3_output_bucket, s3_output_key)
-                    sagemaker_session.upload_data(output_dir, bucket=s3_output_bucket, key_prefix=s3_output_key)
-
                 # Creates a sym link latest.pth -> {iepoch}epoch.pth
                 p = output_dir / "latest.pth"
                 if p.is_symlink() or p.exists():
@@ -475,6 +469,11 @@ class Trainer:
                 best_model_criterion=trainer_options.best_model_criterion,
                 nbest=keep_nbest_models,
             )
+
+        # If s3 output bucket is specified, the output dir is uploaded to S3
+        if trainer_options.s3_output is not None:
+
+            sagemaker_session.upload_data(output_dir, bucket=s3_output_bucket, key_prefix=output_dir)
 
     @classmethod
     def train_one_epoch(
