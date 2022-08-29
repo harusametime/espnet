@@ -473,7 +473,14 @@ class Trainer:
         # If s3 output bucket is specified, the output dir is uploaded to S3
         if trainer_options.s3_output is not None:
             import os
-            s3_dist_path = sagemaker_session.upload_data(output_dir, bucket=s3_output_bucket, key_prefix=output_dir)
+
+            # output_dir is like "exp/lm_train_lm_en_bpe30" and s3_output_key is like sagemaker/exp
+            # To combine them to sagemaker/exp/lm_train_lm_en_bpe30
+            # extract basename (the last part of the path) from output dir
+            base_output_dir = os.path.basename(output_dir)
+            s3_dist_path = sagemaker_session.upload_data(output_dir, \
+                                                        bucket=s3_output_bucket, \
+                                                        key_prefix=os.path.join(s3_output_key,base_output_dir))
             print(f"data uploaded from {os.listdir(output_dir)} to {s3_dist_path }")
 
     @classmethod
