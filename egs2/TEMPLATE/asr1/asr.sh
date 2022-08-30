@@ -976,8 +976,10 @@ if ! "${skip_train}"; then
         #       but it's used only for deciding the sample ids.
 
         # shellcheck disable=SC2046,SC2086
+        # Sagemaker studio notebook has only 64M shared memory so only the case num workers = 0 works
         ${train_cmd} JOB=1:"${_nj}" "${_logdir}"/stats.JOB.log \
             ${python} -m espnet2.bin.asr_train \
+                --num_workers 0 \
                 --collect_stats true \
                 --use_preprocessor true \
                 --bpemodel "${bpemodel}" \
@@ -1104,6 +1106,7 @@ if ! "${skip_train}"; then
             --num_nodes "${num_nodes}" \
             --init_file_prefix "${asr_exp}"/.dist_init_ \
             --multiprocessing_distributed true -- \
+            --sagemaker_train_config "${sagemaker_train_config}" -- \
             ${python} -m espnet2.bin.asr_train \
                 --use_preprocessor true \
                 --bpemodel "${bpemodel}" \
