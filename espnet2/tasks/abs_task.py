@@ -1027,7 +1027,6 @@ class AbsTask(ABC):
 
         print(f"args: {args}")
         print(f"args: {args.ngpu}")
-        print(f"args: {args.ngpu}")
         print(f"On_sagemaker: {On_sagemaker}")
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
