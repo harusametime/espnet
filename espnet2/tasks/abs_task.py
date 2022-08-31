@@ -1025,7 +1025,10 @@ class AbsTask(ABC):
             sys.exit(0)
         cls.check_required_command_args(args)
 
-        print(f"pass")
+        print(f"args: {args}")
+        print(f"args: {args.ngpu}")
+        print(f"args: {args.ngpu}")
+        print(f"On_sagemaker: {On_sagemaker}")
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
 
