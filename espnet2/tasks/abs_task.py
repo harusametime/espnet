@@ -1025,9 +1025,6 @@ class AbsTask(ABC):
             sys.exit(0)
         cls.check_required_command_args(args)
 
-        print(f"args: {args}")
-        print(f"args: {args.ngpu}")
-        print(f"On_sagemaker: {On_sagemaker}")
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
 
@@ -1167,10 +1164,16 @@ class AbsTask(ABC):
             raise RuntimeError(
                 f"model must inherit {AbsESPnetModel.__name__}, but got {type(model)}"
             )
+
+
+        print(f"args: {args.ngpu}")
+
         model = model.to(
             dtype=getattr(torch, args.train_dtype),
             device="cuda" if args.ngpu > 0 else "cpu",
         )
+
+        print(f"On_sagemaker: {model}")
         for t in args.freeze_param:
             for k, p in model.named_parameters():
                 if k.startswith(t + ".") or k == t:
