@@ -1039,15 +1039,16 @@ class AbsTask(ABC):
             # |GPU1  |GPU2  |GPU1  |GPU2  |
 
             # ---- sagemaker distributed training ----
+            # Distributed training can run in managed way. Just send args.
             if On_sagemaker:
                 print("run on sagemaker")
-                import smdistributed.dataparallel.torch.distributed as dist
-                local_args = argparse.Namespace(**vars(args))
-                local_args.local_rank = dist.get_local_rank()
-                local_args.dist_rank = dist.distributed.get_rank()
-                local_args.ngpu = int(os.environ['SM_NUM_GPUS'])
-                local_args.sagemaker = True
-                cls.main_worker(local_args)
+                cls.main_worker(args)
+                # local_args = argparse.Namespace(**vars(args))
+                # local_args.local_rank = dist.get_local_rank()
+                # local_args.dist_rank = dist.distributed.get_rank()
+                # local_args.ngpu = int(os.environ['SM_NUM_GPUS'])
+                # local_args.sagemaker = True
+                # cls.main_worker(local_args)
 
             else:
                 # See also the following usage of --multiprocessing-distributed:
@@ -1131,13 +1132,8 @@ class AbsTask(ABC):
                 f" %(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s",
             )
 
-        # Invoking torch.distributed.init_process_group
-        # If it is on sagemaker, initialize it by smddp
-        if hasattr(args, "sagemaker"):
-            import smdistributed.dataparallel.torch.torch_smddp
-            torch.distributed.init_process_group(backend='smddp')
-        else:
-            distributed_option.init_torch_distributed()
+
+        distributed_option.init_torch_distributed()
 
         # 1. Set random-seed
         set_all_random_seed(args.seed)

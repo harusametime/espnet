@@ -84,7 +84,17 @@ class DistributedOption:
                     )
 
     def init_torch_distributed(self):
+
+        # If this runs on SageMaker, return world size with smddp
+        # any sagemaker env variable can be used to check, here uses "SM_HOSTS".
         if self.distributed:
+
+            # in case of distributed training on sagemaker
+            if "SM_HOSTS" in os.environ:
+                import smdistributed.dataparallel.torch.torch_smddp
+                import torch.distributed as dist
+                dist.init_process_group(backend='smddp')
+                return
             # See:
             # https://docs.nvidia.com/deeplearning/sdk/nccl-developer-guide/docs/env.html
             os.environ.setdefault("NCCL_DEBUG", "INFO")
@@ -112,6 +122,11 @@ class DistributedOption:
 def resolve_distributed_mode(args):
     # Note that args.distributed is set by only this function.
     # and ArgumentParser doesn't have such option
+
+    # If this runs on SageMaker, return world size with smddp
+    # any sagemaker env variable can be used to check, here uses "SM_HOSTS".
+    if "SM_HOSTS" in os.environ:
+        args.dist_launcher = "sagemaker"
 
     if args.multiprocessing_distributed:
         num_nodes = get_num_nodes(args.dist_world_size, args.dist_launcher)
@@ -207,6 +222,8 @@ def get_rank(prior=None, launcher: str = None) -> Optional[int]:
             raise RuntimeError(
                 "launcher=mpi is used for 'multiprocessing-distributed' mode"
             )
+        elif launcher == "sagemaker":
+            prior = os.environ["SM_HOSTS"].index(os.environ["SM_CURRENT_HOST"])
         elif launcher is not None:
             raise RuntimeError(f"launcher='{launcher}' is not supported")
 
@@ -219,13 +236,6 @@ def get_rank(prior=None, launcher: str = None) -> Optional[int]:
 
 def get_world_size(prior=None, launcher: str = None) -> int:
 
-    # If this runs on SageMaker, return world size with smddp
-    # any sagemaker env variable can be used to check, here uses "SM_HOSTS".
-    if "SM_HOSTS" in os.environ:
-        # import smdistributed.dataparallel.torch.distributed as dist
-        # return dist.get_world_size()
-        return torch.distributed.get_world_size()
-
     if prior is None:
         if launcher == "slurm":
             if not is_in_slurm_step():
@@ -235,6 +245,8 @@ def get_world_size(prior=None, launcher: str = None) -> int:
             raise RuntimeError(
                 "launcher=mpi is used for 'multiprocessing-distributed' mode"
             )
+        elif launcher == "sagemaker":
+            prior = len(os.environ.get("SM_HOSTS"))
         elif launcher is not None:
             raise RuntimeError(f"launcher='{launcher}' is not supported")
 
@@ -338,6 +350,7 @@ def get_node_rank(prior=None, launcher: str = None) -> Optional[int]:
         comm = MPI.COMM_WORLD
         # Assume ntasks_per_node == 1 (We can't check whether it is or not)
         return comm.Get_rank()
+
     elif launcher is not None:
         raise RuntimeError(f"launcher='{launcher}' is not supported")
     else:
@@ -371,6 +384,9 @@ def get_num_nodes(prior=None, launcher: str = None) -> Optional[int]:
         comm = MPI.COMM_WORLD
         # Assume ntasks_per_node == 1 (We can't check whether it is or not)
         return comm.Get_size()
+    elif launcher == "sagemaker":
+        return len(os.environ.get("SM_HOSTS"))
+
     elif launcher is not None:
         raise RuntimeError(f"launcher='{launcher}' is not supported")
     else:
