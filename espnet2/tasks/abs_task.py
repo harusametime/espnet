@@ -1033,6 +1033,7 @@ class AbsTask(ABC):
         print(args.distributed, args.multiprocessing_distributed)
 
         if not args.distributed or not args.multiprocessing_distributed:
+            print("run alone")
             cls.main_worker(args)
 
         else:
@@ -1045,6 +1046,7 @@ class AbsTask(ABC):
 
             # ---- sagemaker distributed training ----
             if On_sagemaker:
+                print("run on sagemaker")
                 import smdistributed.dataparallel.torch.distributed as dist
                 local_args = argparse.Namespace(**vars(args))
                 local_args.local_rank = dist.get_local_rank()
