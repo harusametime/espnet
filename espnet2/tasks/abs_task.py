@@ -1010,25 +1010,27 @@ class AbsTask(ABC):
             if cmd[-1] == "sagemaker":
                 On_sagemaker = True
                 cmd = cmd[:-1]
-                print(f"cmd for sagemaker: {cmd}")
 
         if args is None:
             parser = cls.get_parser()
             args = parser.parse_args(cmd)
 
-        print(f"parsed_args: {args}")
         args.version = __version__
         if args.pretrain_path is not None:
             raise RuntimeError("--pretrain_path is deprecated. Use --init_param")
         if args.print_config:
             cls.print_config()
             sys.exit(0)
+        if On_sagemaker:
+            args.ngpu = int(os.environ['SM_NUM_GPUS'])
+            print(f"args.ngpu: {args.ngpu}, {os.environ['SM_NUM_GPUS']}")
+
         cls.check_required_command_args(args)
 
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
 
-        args.ngpu = int(os.environ['SM_NUM_GPUS'])
+        print(args.distributed, args.multiprocessing_distributed)
 
         if not args.distributed or not args.multiprocessing_distributed:
             cls.main_worker(args)
