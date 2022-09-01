@@ -222,8 +222,9 @@ def get_world_size(prior=None, launcher: str = None) -> int:
     # If this runs on SageMaker, return world size with smddp
     # any sagemaker env variable can be used to check, here uses "SM_HOSTS".
     if "SM_HOSTS" in os.environ:
-        import smdistributed.dataparallel.torch.distributed as dist
-        return dist.get_world_size()
+        # import smdistributed.dataparallel.torch.distributed as dist
+        # return dist.get_world_size()
+        return torch.distributed.get_world_size()
 
     if prior is None:
         if launcher == "slurm":
