@@ -26,7 +26,6 @@ def main(cmd=None):
         parser.add_argument('--cmd', type=str, default="")
         args = parser.parse_args()
         cmd = eval(args.cmd)
-        cmd.append("sagemaker")
 
         # SageMaker downloads data in /opt/ml/input/, but espnet assumes the data
         # in current directory. Create symblic link to /opt/ml/input/, which can be

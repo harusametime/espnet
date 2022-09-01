@@ -1003,14 +1003,6 @@ class AbsTask(ABC):
     def main(cls, args: argparse.Namespace = None, cmd: Sequence[str] = None):
         assert check_argument_types()
 
-        On_sagemaker = False
-
-        print(f"cmd: {cmd}")
-        if cmd is not None:
-            if cmd[-1] == "sagemaker":
-                On_sagemaker = True
-                cmd = cmd[:-1]
-
         if args is None:
             parser = cls.get_parser()
             args = parser.parse_args(cmd)
@@ -1021,7 +1013,9 @@ class AbsTask(ABC):
         if args.print_config:
             cls.print_config()
             sys.exit(0)
-        if On_sagemaker:
+
+        # check arg of s3_output to know this run on SageMaker
+        if hasattr(args, 's3_output'):
             args.ngpu = int(os.environ['SM_NUM_GPUS'])
             print(f"args.ngpu: {args.ngpu}, {os.environ['SM_NUM_GPUS']}")
 
