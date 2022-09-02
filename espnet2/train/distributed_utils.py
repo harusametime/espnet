@@ -282,6 +282,7 @@ def get_local_rank(prior=None, launcher: str = None) -> Optional[int]:
             raise RuntimeError(
                 "launcher=mpi is used for 'multiprocessing-distributed' mode"
             )
+
         elif launcher == "sagemaker":
             raise RuntimeError(
                 "launcher=sagemaker is used for 'multiprocessing-distributed' mode"
