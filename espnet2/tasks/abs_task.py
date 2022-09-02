@@ -1024,8 +1024,6 @@ class AbsTask(ABC):
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
 
-        print(args.distributed, args.multiprocessing_distributed)
-
         if not args.distributed or not args.multiprocessing_distributed:
             print("run alone")
             cls.main_worker(args)
@@ -1040,7 +1038,8 @@ class AbsTask(ABC):
 
             # ---- sagemaker distributed training ----
             # Distributed training can run in managed way. Just send args.
-            if On_sagemaker:
+            # check arg of s3_output to know this run on SageMaker
+            if hasattr(args, 's3_output'):
                 print("run on sagemaker")
                 cls.main_worker(args)
                 # local_args = argparse.Namespace(**vars(args))

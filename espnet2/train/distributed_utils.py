@@ -1,4 +1,6 @@
 import dataclasses
+import importlib.util
+import json
 import os
 import socket
 from typing import Optional
@@ -82,41 +84,48 @@ class DistributedOption:
                     self.dist_init_method = (
                         f"tcp://{self.dist_master_addr}:{self.dist_master_port}"
                     )
+    def is_sagemaker_dp_enabled():
+        # Get the sagemaker specific env variable.
+        sagemaker_params = os.getenv("SM_FRAMEWORK_PARAMS", "{}")
+        try:
+            # Parse it and check the field "sagemaker_distributed_dataparallel_enabled".
+            sagemaker_params = json.loads(sagemaker_params)
+            if not sagemaker_params.get("sagemaker_distributed_dataparallel_enabled", False):
+                return False
+        except json.JSONDecodeError:
+            return False
+        # Lastly, check if the `smdistributed` module is present.
+        return importlib.util.find_spec("smdistributed") is not None
 
     def init_torch_distributed(self):
 
-        # If this runs on SageMaker, return world size with smddp
-        # any sagemaker env variable can be used to check, here uses "SM_HOSTS".
         if self.distributed:
-
             # in case of distributed training on sagemaker
-            if "SM_HOSTS" in os.environ:
-                import smdistributed.dataparallel.torch.torch_smddp
-                import torch.distributed as dist
+            if is_sagemaker_dp_enabled():
                 dist.init_process_group(backend='smddp')
-                return
-            # See:
-            # https://docs.nvidia.com/deeplearning/sdk/nccl-developer-guide/docs/env.html
-            os.environ.setdefault("NCCL_DEBUG", "INFO")
+            else:
+                # See:
+                # https://docs.nvidia.com/deeplearning/sdk/nccl-developer-guide/docs/env.html
+                os.environ.setdefault("NCCL_DEBUG", "INFO")
 
-            # See:
-            # https://pytorch.org/docs/stable/distributed.html#torch.distributed.init_process_group
-            os.environ.setdefault("NCCL_BLOCKING_WAIT", "1")
+                # See:
+                # https://pytorch.org/docs/stable/distributed.html#torch.distributed.init_process_group
+                os.environ.setdefault("NCCL_BLOCKING_WAIT", "1")
 
-            torch.distributed.init_process_group(
-                backend=self.dist_backend,
-                init_method=self.dist_init_method,
-                world_size=self.dist_world_size,
-                rank=self.dist_rank,
-            )
+                torch.distributed.init_process_group(
+                    backend=self.dist_backend,
+                    init_method=self.dist_init_method,
+                    world_size=self.dist_world_size,
+                    rank=self.dist_rank,
+                )
 
-            # About distributed model:
-            # if self.local_rank is not None and ngpu == 1
-            #    => Distributed with n-Process and n-GPU
-            # if self.local_rank is None and ngpu >= 1
-            #    => Distributed with 1-Process and n-GPU
-            if self.local_rank is not None and self.ngpu > 0:
-                torch.cuda.set_device(self.local_rank)
+                # About distributed model:
+                # if self.local_rank is not None and ngpu == 1
+                #    => Distributed with n-Process and n-GPU
+                # if self.local_rank is None and ngpu >= 1
+                #    => Distributed with 1-Process and n-GPU
+                if self.local_rank is not None and self.ngpu > 0:
+                    torch.cuda.set_device(self.local_rank)
 
 
 def resolve_distributed_mode(args):
@@ -266,10 +275,14 @@ def get_local_rank(prior=None, launcher: str = None) -> Optional[int]:
                 raise RuntimeError("This process seems not to be launched by 'srun'")
 
             prior = int(os.environ["SLURM_LOCALID"])
+
         elif launcher == "mpi":
             raise RuntimeError(
                 "launcher=mpi is used for 'multiprocessing-distributed' mode"
             )
+        elif launcher == "sagemaker":
+            prior = int(os.environ["LOCAL_RANK"])
+            
         elif launcher is not None:
             raise RuntimeError(f"launcher='{launcher}' is not supported")
 
