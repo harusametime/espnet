@@ -137,6 +137,8 @@ def resolve_distributed_mode(args):
     if "SM_HOSTS" in os.environ:
         args.dist_launcher = "sagemaker"
 
+    print(args.multiprocessing_distributed)
+    args.multiprocessing_distributed = True
     if args.multiprocessing_distributed:
         num_nodes = get_num_nodes(args.dist_world_size, args.dist_launcher)
         # a. multi-node
@@ -281,8 +283,11 @@ def get_local_rank(prior=None, launcher: str = None) -> Optional[int]:
                 "launcher=mpi is used for 'multiprocessing-distributed' mode"
             )
         elif launcher == "sagemaker":
-            prior = int(os.environ["LOCAL_RANK"])
-            
+            if is_sagemaker_dp_enabled():
+                prior = int(os.environ["LOCAL_RANK"])
+            else:
+
+
         elif launcher is not None:
             raise RuntimeError(f"launcher='{launcher}' is not supported")
 
