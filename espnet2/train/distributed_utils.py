@@ -84,6 +84,7 @@ class DistributedOption:
                     self.dist_init_method = (
                         f"tcp://{self.dist_master_addr}:{self.dist_master_port}"
                     )
+
     def is_sagemaker_dp_enabled():
         # Get the sagemaker specific env variable.
         sagemaker_params = os.getenv("SM_FRAMEWORK_PARAMS", "{}")
@@ -137,8 +138,6 @@ def resolve_distributed_mode(args):
     if "SM_HOSTS" in os.environ:
         args.dist_launcher = "sagemaker"
 
-    print(args.multiprocessing_distributed)
-    args.multiprocessing_distributed = True
     if args.multiprocessing_distributed:
         num_nodes = get_num_nodes(args.dist_world_size, args.dist_launcher)
         # a. multi-node
@@ -284,9 +283,15 @@ def get_local_rank(prior=None, launcher: str = None) -> Optional[int]:
             )
 
         elif launcher == "sagemaker":
-            raise RuntimeError(
-                "launcher=sagemaker is used for 'multiprocessing-distributed' mode"
-            )
+            if is_sagemaker_dp_enabled():
+                import smdistributed.dataparallel.torch.distributed as dist
+                from smdistributed.dataparallel.torch.parallel.distributed import DistributedDataParallel as DDP
+
+                dist.init_process_group()
+                prior = dist.get_local_rank()
+            else:
+                print("launcher=sagemaker requires snddp library, but run with 1 gpu")
+                prior = 1
 
         elif launcher is not None:
             raise RuntimeError(f"launcher='{launcher}' is not supported")
@@ -361,6 +366,9 @@ def get_node_rank(prior=None, launcher: str = None) -> Optional[int]:
                 "Run with --ntasks_per_node=1 if mutliprocessing_distributed=true"
             )
         return int(os.environ["SLURM_NODEID"])
+    elif launcher == "sagemaker":
+        return os.environ["SM_HOSTS"].index(os.environ["SM_CURRENT_HOST"])
+
     elif launcher == "mpi":
         # Use mpi4py only for initialization and not using for communication
         from mpi4py import MPI
