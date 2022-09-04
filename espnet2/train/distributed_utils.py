@@ -8,6 +8,18 @@ from typing import Optional
 import torch
 import torch.distributed
 
+def is_sagemaker_dp_enabled():
+    # Get the sagemaker specific env variable.
+    sagemaker_params = os.getenv("SM_FRAMEWORK_PARAMS", "{}")
+    try:
+        # Parse it and check the field "sagemaker_distributed_dataparallel_enabled".
+        sagemaker_params = json.loads(sagemaker_params)
+        if not sagemaker_params.get("sagemaker_distributed_dataparallel_enabled", False):
+            return False
+    except json.JSONDecodeError:
+        return False
+    # Lastly, check if the `smdistributed` module is present.
+    return importlib.util.find_spec("smdistributed") is not None
 
 @dataclasses.dataclass
 class DistributedOption:
@@ -84,19 +96,6 @@ class DistributedOption:
                     self.dist_init_method = (
                         f"tcp://{self.dist_master_addr}:{self.dist_master_port}"
                     )
-
-    def is_sagemaker_dp_enabled():
-        # Get the sagemaker specific env variable.
-        sagemaker_params = os.getenv("SM_FRAMEWORK_PARAMS", "{}")
-        try:
-            # Parse it and check the field "sagemaker_distributed_dataparallel_enabled".
-            sagemaker_params = json.loads(sagemaker_params)
-            if not sagemaker_params.get("sagemaker_distributed_dataparallel_enabled", False):
-                return False
-        except json.JSONDecodeError:
-            return False
-        # Lastly, check if the `smdistributed` module is present.
-        return importlib.util.find_spec("smdistributed") is not None
 
     def init_torch_distributed(self):
 
