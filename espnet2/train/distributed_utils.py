@@ -137,6 +137,7 @@ def resolve_distributed_mode(args):
     if "SM_HOSTS" in os.environ:
         args.dist_launcher = "sagemaker"
 
+    print(f"dist_flag: {args.multiprocessing_distributed}")
     if args.multiprocessing_distributed:
         num_nodes = get_num_nodes(args.dist_world_size, args.dist_launcher)
         # a. multi-node

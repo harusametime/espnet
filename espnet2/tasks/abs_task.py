@@ -1158,7 +1158,6 @@ class AbsTask(ABC):
             device="cuda" if args.ngpu > 0 else "cpu",
         )
 
-        print(f"On_sagemaker: {model}")
         for t in args.freeze_param:
             for k, p in model.named_parameters():
                 if k.startswith(t + ".") or k == t:
