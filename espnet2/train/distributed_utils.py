@@ -102,7 +102,7 @@ class DistributedOption:
         if self.distributed:
             # in case of distributed training on sagemaker
             if is_sagemaker_dp_enabled():
-                torch.distributed.init_process_group((backend='smddp')
+                torch.distributed.init_process_group(backend='smddp')
             else:
                 # See:
                 # https://docs.nvidia.com/deeplearning/sdk/nccl-developer-guide/docs/env.html
