@@ -1017,7 +1017,7 @@ class AbsTask(ABC):
         # check arg of s3_output to know this run on SageMaker
         if hasattr(args, 's3_output'):
             args.ngpu = int(os.environ['SM_NUM_GPUS'])
-            print(f"args.ngpu: {args.ngpu}, {os.environ['SM_NUM_GPUS']}")
+
 
         cls.check_required_command_args(args)
 
@@ -1041,7 +1041,7 @@ class AbsTask(ABC):
             # check arg of s3_output to know this run on SageMaker
             if hasattr(args, 's3_output'):
                 print("run on sagemaker")
-                cls.main_worker(args)
+                cls.sagemaker_worker(args)
                 # local_args = argparse.Namespace(**vars(args))
                 # local_args.local_rank = dist.get_local_rank()
                 # local_args.dist_rank = dist.distributed.get_rank()
@@ -1863,3 +1863,226 @@ class AbsTask(ABC):
             model.load_state_dict(torch.load(model_file, map_location=device))
 
         return model, args
+
+    @classmethod
+    def sagemaker_worker(cls, args: argparse.Namespace):
+
+        # 1. Set random-seed
+        set_all_random_seed(args.seed)
+        torch.backends.cudnn.enabled = args.cudnn_enabled
+        torch.backends.cudnn.benchmark = args.cudnn_benchmark
+        torch.backends.cudnn.deterministic = args.cudnn_deterministic
+        if args.detect_anomaly:
+            logging.info("Invoking torch.autograd.set_detect_anomaly(True)")
+            torch.autograd.set_detect_anomaly(args.detect_anomaly)
+
+        # 2. Build model
+        model = cls.build_model(args=args)
+        if not isinstance(model, AbsESPnetModel):
+            raise RuntimeError(
+                f"model must inherit {AbsESPnetModel.__name__}, but got {type(model)}"
+            )
+
+        model = model.to(
+            dtype=getattr(torch, args.train_dtype),
+            device="cuda" if args.ngpu > 0 else "cpu",
+        )
+
+        for t in args.freeze_param:
+            for k, p in model.named_parameters():
+                if k.startswith(t + ".") or k == t:
+                    logging.info(f"Setting {k}.requires_grad = False")
+                    p.requires_grad = False
+
+        # 3. Build optimizer
+        optimizers = cls.build_optimizers(args, model=model)
+
+        # 4. Build schedulers
+        schedulers = []
+        for i, optim in enumerate(optimizers, 1):
+            suf = "" if i == 1 else str(i)
+            name = getattr(args, f"scheduler{suf}")
+            conf = getattr(args, f"scheduler{suf}_conf")
+            if name is not None:
+                cls_ = scheduler_classes.get(name)
+                if cls_ is None:
+                    raise ValueError(
+                        f"must be one of {list(scheduler_classes)}: {name}"
+                    )
+                scheduler = cls_(optim, **conf)
+            else:
+                scheduler = None
+
+            schedulers.append(scheduler)
+
+        logging.info(pytorch_cudnn_version())
+        logging.info(model_summary(model))
+        for i, (o, s) in enumerate(zip(optimizers, schedulers), 1):
+            suf = "" if i == 1 else str(i)
+            logging.info(f"Optimizer{suf}:\n{o}")
+            logging.info(f"Scheduler{suf}: {s}")
+
+        # 5. Dump "args" to config.yaml
+        # NOTE(kamo): "args" should be saved after object-buildings are done
+        #  because they are allowed to modify "args".
+        output_dir = Path(args.output_dir)
+        if not distributed_option.distributed or distributed_option.dist_rank == 0:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            with (output_dir / "config.yaml").open("w", encoding="utf-8") as f:
+                logging.info(
+                    f'Saving the configuration in {output_dir / "config.yaml"}'
+                )
+                yaml_no_alias_safe_dump(vars(args), f, indent=4, sort_keys=False)
+
+        if args.dry_run:
+            pass
+        elif args.collect_stats:
+            # Perform on collect_stats mode. This mode has two roles
+            # - Derive the length and dimension of all input data
+            # - Accumulate feats, square values, and the length for whitening
+            logging.info(args)
+
+            if args.valid_batch_size is None:
+                args.valid_batch_size = args.batch_size
+
+            if len(args.train_shape_file) != 0:
+                train_key_file = args.train_shape_file[0]
+            else:
+                train_key_file = None
+            if len(args.valid_shape_file) != 0:
+                valid_key_file = args.valid_shape_file[0]
+            else:
+                valid_key_file = None
+
+            collect_stats(
+                model=model,
+                train_iter=cls.build_streaming_iterator(
+                    data_path_and_name_and_type=args.train_data_path_and_name_and_type,
+                    key_file=train_key_file,
+                    batch_size=args.batch_size,
+                    dtype=args.train_dtype,
+                    num_workers=args.num_workers,
+                    allow_variable_data_keys=args.allow_variable_data_keys,
+                    ngpu=args.ngpu,
+                    preprocess_fn=cls.build_preprocess_fn(args, train=False),
+                    collate_fn=cls.build_collate_fn(args, train=False),
+                ),
+                valid_iter=cls.build_streaming_iterator(
+                    data_path_and_name_and_type=args.valid_data_path_and_name_and_type,
+                    key_file=valid_key_file,
+                    batch_size=args.valid_batch_size,
+                    dtype=args.train_dtype,
+                    num_workers=args.num_workers,
+                    allow_variable_data_keys=args.allow_variable_data_keys,
+                    ngpu=args.ngpu,
+                    preprocess_fn=cls.build_preprocess_fn(args, train=False),
+                    collate_fn=cls.build_collate_fn(args, train=False),
+                ),
+                output_dir=output_dir,
+                ngpu=args.ngpu,
+                log_interval=args.log_interval,
+                write_collected_feats=args.write_collected_feats,
+            )
+        else:
+            # 6. Loads pre-trained model
+            for p in args.init_param:
+                logging.info(f"Loading pretrained params from {p}")
+                load_pretrained_model(
+                    model=model,
+                    init_param=p,
+                    ignore_init_mismatch=args.ignore_init_mismatch,
+                    # NOTE(kamo): "cuda" for torch.load always indicates cuda:0
+                    #   in PyTorch<=1.4
+                    map_location=f"cuda:{torch.cuda.current_device()}"
+                    if args.ngpu > 0
+                    else "cpu",
+                )
+
+            # 7. Build iterator factories
+            if args.multiple_iterator:
+                train_iter_factory = cls.build_multiple_iter_factory(
+                    args=args,
+                    distributed_option=distributed_option,
+                    mode="train",
+                )
+            else:
+                train_iter_factory = cls.build_iter_factory(
+                    args=args,
+                    distributed_option=distributed_option,
+                    mode="train",
+                )
+            valid_iter_factory = cls.build_iter_factory(
+                args=args,
+                distributed_option=distributed_option,
+                mode="valid",
+            )
+            if not args.use_matplotlib and args.num_att_plot != 0:
+                args.num_att_plot = 0
+                logging.info("--use_matplotlib false => Changing --num_att_plot to 0")
+
+            if args.num_att_plot != 0:
+                plot_attention_iter_factory = cls.build_iter_factory(
+                    args=args,
+                    distributed_option=distributed_option,
+                    mode="plot_att",
+                )
+            else:
+                plot_attention_iter_factory = None
+
+            # 8. Start training
+            if args.use_wandb:
+                if wandb is None:
+                    raise RuntimeError("Please install wandb")
+
+                try:
+                    wandb.login()
+                except wandb.errors.UsageError:
+                    logging.info("wandb not configured! run `wandb login` to enable")
+                    args.use_wandb = False
+
+            if args.use_wandb:
+                if (
+                    not distributed_option.distributed
+                    or distributed_option.dist_rank == 0
+                ):
+                    if args.wandb_project is None:
+                        project = "ESPnet_" + cls.__name__
+                    else:
+                        project = args.wandb_project
+
+                    if args.wandb_name is None:
+                        name = str(Path(".").resolve()).replace("/", "_")
+                    else:
+                        name = args.wandb_name
+
+                    wandb.init(
+                        entity=args.wandb_entity,
+                        project=project,
+                        name=name,
+                        dir=output_dir,
+                        id=args.wandb_id,
+                        resume=args.resume,
+                    )
+                    wandb.config.update(args)
+                else:
+                    # wandb also supports grouping for distributed training,
+                    # but we only logs aggregated data,
+                    # so it's enough to perform on rank0 node.
+                    args.use_wandb = False
+
+            # Don't give args to trainer.run() directly!!!
+            # Instead of it, define "Options" object and build here.
+            trainer_options = cls.trainer.build_options(args)
+            cls.trainer.run(
+                model=model,
+                optimizers=optimizers,
+                schedulers=schedulers,
+                train_iter_factory=train_iter_factory,
+                valid_iter_factory=valid_iter_factory,
+                plot_attention_iter_factory=plot_attention_iter_factory,
+                trainer_options=trainer_options,
+                distributed_option=distributed_option,
+            )
+
+            if args.use_wandb and wandb.run:
+                wandb.finish()

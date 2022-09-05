@@ -183,6 +183,8 @@ def main(cmd=None):
         # here added s3_output_path for uploading the file
         args.args.extend(["--s3_output", s3_exp])
 
+        args.args.extend(["--multiprocessing_distributed", "True"])
+
         # launch.py receives entrypoint the third item of the args list
         #  ['python3', '-m', 'espnet2.bin.lm_train']
         # Extracting the third element and concatenating it with the absolute path
