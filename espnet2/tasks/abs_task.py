@@ -1867,6 +1867,12 @@ class AbsTask(ABC):
     @classmethod
     def sagemaker_worker(cls, args: argparse.Namespace):
 
+
+        # 0. Init distributed process
+        distributed_option = build_dataclass(DistributedOption, args)
+        # Setting distributed_option.dist_rank, etc.
+        # distributed_option.init_options()
+
         # 1. Set random-seed
         set_all_random_seed(args.seed)
         torch.backends.cudnn.enabled = args.cudnn_enabled
