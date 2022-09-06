@@ -212,8 +212,15 @@ class Trainer:
                 f"The training has already reached at max_epoch: {start_epoch}"
             )
 
+        print(f"distributed_option: {distributed_option}")
         if distributed_option.distributed:
-            if trainer_options.sharded_ddp:
+            if distributed_option.launcher == 'sagemaker':
+                dp_model = torch.nn.parallel.DistributedDataParallel(model)
+                local_rank = os.environ["LOCAL_RANK"]
+                torch.cuda.set_device(local_rank)
+                dp_model.cuda(local_rank)
+
+            elif trainer_options.sharded_ddp:
                 dp_model = fairscale.nn.data_parallel.ShardedDataParallel(
                     module=model,
                     sharded_optimizer=optimizers,
