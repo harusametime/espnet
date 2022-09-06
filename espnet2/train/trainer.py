@@ -216,8 +216,7 @@ class Trainer:
         if distributed_option.distributed:
             if distributed_option.dist_launcher == 'sagemaker':
                 dp_model = torch.nn.parallel.DistributedDataParallel(model)
-                local_rank = os.environ["LOCAL_RANK"]
-                torch.cuda.set_device(local_rank)
+                torch.cuda.set_device(smdistributed.dataparallel.torch.distributed.get_local_rank())
                 dp_model.cuda(local_rank)
 
             elif trainer_options.sharded_ddp:
