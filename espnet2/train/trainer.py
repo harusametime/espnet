@@ -485,7 +485,7 @@ class Trainer:
             # To combine them to sagemaker/exp/lm_train_lm_en_bpe30
             # extract basename (the last part of the path) from output dir
             base_output_dir = os.path.basename(output_dir)
-            print(f"data uploaded {os.listdir(output_dir)} under {output_dir} to {s3_dist_path }")
+            print(f"data uploaded {os.listdir(output_dir)} under {output_dir} to {os.path.join(s3_output_bucket,s3_output_key,base_output_dir)}")
             s3_dist_path = sagemaker_session.upload_data(output_dir, \
                                                         bucket=s3_output_bucket, \
                                                         key_prefix=os.path.join(s3_output_key,base_output_dir))
