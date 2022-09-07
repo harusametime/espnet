@@ -1874,7 +1874,45 @@ class AbsTask(ABC):
         # Setting distributed_option.dist_rank, etc.
         # distributed_option.init_options()
 
-        # skip logging
+        # Init distributed process with smdistributed instead of init_options
+        import smdistributed.dataparallel.torch.distributed
+        distributed_option.dist_local_rank = smdistributed.dataparallel.torch.distributed.get_local_rank()
+        distributed_option.dist_rank = smdistributed.dataparallel.torch.distributed.get_rank()
+        distributed_option.dist_world_size = smdistributed.dataparallel.torch.distributed.get_world_size()
+
+        #check options
+        print(f"distributed_option: {distributed_option}")
+        # NOTE(kamo): Don't use logging before invoking logging.basicConfig()
+
+
+        if not distributed_option.distributed or distributed_option.dist_rank == 0:
+            if not distributed_option.distributed:
+                _rank = ""
+            else:
+                _rank = (
+                    f":{distributed_option.dist_rank}/"
+                    f"{distributed_option.dist_world_size}"
+                )
+
+            # NOTE(kamo):
+            # logging.basicConfig() is invoked in main_worker() instead of main()
+            # because it can be invoked only once in a process.
+            # FIXME(kamo): Should we use logging.getLogger()?
+            logging.basicConfig(
+                level=args.log_level,
+                format=f"[{os.uname()[1].split('.')[0]}{_rank}]"
+                f" %(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s",
+            )
+        else:
+            # Suppress logging if RANK != 0
+            logging.basicConfig(
+                level="ERROR",
+                format=f"[{os.uname()[1].split('.')[0]}"
+                f":{distributed_option.dist_rank}/{distributed_option.dist_world_size}]"
+                f" %(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s",
+            )
+
+
 
         distributed_option.init_torch_distributed()
 

@@ -286,7 +286,6 @@ def get_local_rank(prior=None, launcher: str = None) -> Optional[int]:
             if is_sagemaker_dp_enabled():
                 import smdistributed.dataparallel.torch.distributed as dist
                 from smdistributed.dataparallel.torch.parallel.distributed import DistributedDataParallel as DDP
-
                 dist.init_process_group()
                 prior = dist.get_local_rank()
             else:
