@@ -1014,17 +1014,18 @@ class AbsTask(ABC):
             cls.print_config()
             sys.exit(0)
 
-        # check arg of s3_output to know this run on SageMaker
-        if hasattr(args, 's3_output'):
-            args.ngpu = int(os.environ['SM_NUM_GPUS'])
-
-
         cls.check_required_command_args(args)
 
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
 
-        if not args.distributed or not args.multiprocessing_distributed:
+        # check arg of s3_output to know this run on SageMaker
+        if hasattr(args, 's3_output'):
+            print("run on sagemaker")
+            args.ngpu = int(os.environ['SM_NUM_GPUS'])
+            cls.sagemaker_worker(args)
+
+        elif not args.distributed or not args.multiprocessing_distributed:
             print("run alone")
             cls.main_worker(args)
 
@@ -1039,9 +1040,6 @@ class AbsTask(ABC):
             # ---- sagemaker distributed training ----
             # Distributed training can run in managed way. Just send args.
             # check arg of s3_output to know this run on SageMaker
-            if hasattr(args, 's3_output'):
-                print("run on sagemaker")
-                cls.sagemaker_worker(args)
                 # local_args = argparse.Namespace(**vars(args))
                 # local_args.local_rank = dist.get_local_rank()
                 # local_args.dist_rank = dist.distributed.get_rank()
@@ -1874,11 +1872,31 @@ class AbsTask(ABC):
         # Setting distributed_option.dist_rank, etc.
         # distributed_option.init_options()
 
+        def is_sagemaker_dp_enabled():
+            # Get the sagemaker specific env variable.
+            sagemaker_params = os.getenv("SM_FRAMEWORK_PARAMS", "{}")
+            try:
+                # Parse it and check the field "sagemaker_distributed_dataparallel_enabled".
+                sagemaker_params = json.loads(sagemaker_params)
+                if not sagemaker_params.get("sagemaker_distributed_dataparallel_enabled", False):
+                    return False
+            except json.JSONDecodeError:
+                return False
+            # Lastly, check if the `smdistributed` module is present.
+            return importlib.util.find_spec("smdistributed") is not None
+
         # Init distributed process with smdistributed instead of init_options
-        import smdistributed.dataparallel.torch.distributed
-        distributed_option.dist_local_rank = smdistributed.dataparallel.torch.distributed.get_local_rank()
-        distributed_option.dist_rank = smdistributed.dataparallel.torch.distributed.get_rank()
-        distributed_option.dist_world_size = smdistributed.dataparallel.torch.distributed.get_world_size()
+        if is_sagemaker_dp_enabled():
+            import smdistributed.dataparallel.torch.distributed
+            distributed_option.dist_local_rank = smdistributed.dataparallel.torch.distributed.get_local_rank()
+            distributed_option.dist_rank = smdistributed.dataparallel.torch.distributed.get_rank()
+            distributed_option.dist_world_size = smdistributed.dataparallel.torch.distributed.get_world_size()
+        elif args.ngpu > 1:
+            distributed_option.dist_rank = torch.distributed.get_rank()
+            distributed_option.dist_world_size = torch.distributed.get_world_size()
+        else:
+            distributed_option.distributed = False
+            distributed_option.dist_rank = 0
 
         #check options
         print(f"distributed_option: {distributed_option}")
