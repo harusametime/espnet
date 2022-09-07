@@ -1037,59 +1037,48 @@ class AbsTask(ABC):
             # |Child1|Child2|Child1|Child2|
             # |GPU1  |GPU2  |GPU1  |GPU2  |
 
-            # ---- sagemaker distributed training ----
-            # Distributed training can run in managed way. Just send args.
-            # check arg of s3_output to know this run on SageMaker
-                # local_args = argparse.Namespace(**vars(args))
-                # local_args.local_rank = dist.get_local_rank()
-                # local_args.dist_rank = dist.distributed.get_rank()
-                # local_args.ngpu = int(os.environ['SM_NUM_GPUS'])
-                # local_args.sagemaker = True
-                # cls.main_worker(local_args)
+            # See also the following usage of --multiprocessing-distributed:
+            # https://github.com/pytorch/examples/blob/master/imagenet/main.py
+            num_nodes = get_num_nodes(args.dist_world_size, args.dist_launcher)
+            if num_nodes == 1:
+                args.dist_master_addr = "localhost"
+                args.dist_rank = 0
+                # Single node distributed training with multi-GPUs
+                if (
+                    args.dist_init_method == "env://"
+                    and get_master_port(args.dist_master_port) is None
+                ):
+                    # Get the unused port
+                    args.dist_master_port = free_port()
 
-            else:
-                # See also the following usage of --multiprocessing-distributed:
-                # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-                num_nodes = get_num_nodes(args.dist_world_size, args.dist_launcher)
-                if num_nodes == 1:
-                    args.dist_master_addr = "localhost"
-                    args.dist_rank = 0
-                    # Single node distributed training with multi-GPUs
-                    if (
-                        args.dist_init_method == "env://"
-                        and get_master_port(args.dist_master_port) is None
-                    ):
-                        # Get the unused port
-                        args.dist_master_port = free_port()
+            # Assume that nodes use same number of GPUs each other
+            args.dist_world_size = args.ngpu * num_nodes
+            node_rank = get_node_rank(args.dist_rank, args.dist_launcher)
 
-                # Assume that nodes use same number of GPUs each other
-                args.dist_world_size = args.ngpu * num_nodes
-                node_rank = get_node_rank(args.dist_rank, args.dist_launcher)
+            # The following block is copied from:
+            # https://github.com/pytorch/pytorch/blob/master/torch/multiprocessing/spawn.py
+            error_queues = []
+            processes = []
+            mp = torch.multiprocessing.get_context("spawn")
+            for i in range(args.ngpu):
+                # Copy args
+                local_args = argparse.Namespace(**vars(args))
 
-                # The following block is copied from:
-                # https://github.com/pytorch/pytorch/blob/master/torch/multiprocessing/spawn.py
-                error_queues = []
-                processes = []
-                mp = torch.multiprocessing.get_context("spawn")
-                for i in range(args.ngpu):
-                    # Copy args
-                    local_args = argparse.Namespace(**vars(args))
+                local_args.local_rank = i
+                local_args.dist_rank = args.ngpu * node_rank + i
+                local_args.ngpu = 1
 
-                    local_args.local_rank = i
-                    local_args.dist_rank = args.ngpu * node_rank + i
-                    local_args.ngpu = 1
-
-                    process = mp.Process(
-                        target=cls.main_worker,
-                        args=(local_args,),
-                        daemon=False,
-                    )
-                    process.start()
-                    processes.append(process)
-                    error_queues.append(mp.SimpleQueue())
-                # Loop on join until it returns True or raises an exception.
-                while not ProcessContext(processes, error_queues).join():
-                    pass
+                process = mp.Process(
+                    target=cls.main_worker,
+                    args=(local_args,),
+                    daemon=False,
+                )
+                process.start()
+                processes.append(process)
+                error_queues.append(mp.SimpleQueue())
+            # Loop on join until it returns True or raises an exception.
+            while not ProcessContext(processes, error_queues).join():
+                pass
 
     @classmethod
     def main_worker(cls, args: argparse.Namespace):
@@ -1147,9 +1136,6 @@ class AbsTask(ABC):
             raise RuntimeError(
                 f"model must inherit {AbsESPnetModel.__name__}, but got {type(model)}"
             )
-
-
-        print(f"args: {args.ngpu}")
 
         model = model.to(
             dtype=getattr(torch, args.train_dtype),
@@ -1893,7 +1879,7 @@ class AbsTask(ABC):
             distributed_option.dist_world_size = smdistributed.dataparallel.torch.distributed.get_world_size()
         elif args.ngpu > 1:
             distributed_option.dist_rank = torch.distributed.get_rank()
-            distributed_option.dist_world_size = torch.distributed.get_world_size()
+            distributed_option.dist_world_size =　torch.distributed.get_world_size()
         else:
             distributed_option.distributed = False
             distributed_option.dist_rank = 0
