@@ -1879,7 +1879,7 @@ class AbsTask(ABC):
             distributed_option.dist_world_size = smdistributed.dataparallel.torch.distributed.get_world_size()
         elif args.ngpu > 1:
             distributed_option.dist_rank = torch.distributed.get_rank()
-            distributed_option.dist_world_size =　torch.distributed.get_world_size()
+            distributed_option.dist_world_size = torch.distributed.get_world_size()
         else:
             distributed_option.distributed = False
             distributed_option.dist_rank = 0
