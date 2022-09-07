@@ -220,6 +220,7 @@ class Trainer:
                 local_rank = smdistributed.dataparallel.torch.distributed.get_local_rank()
                 torch.cuda.set_device(local_rank)
                 dp_model.cuda(local_rank)
+                distributed_option.dist_rank = smdistributed.dataparallel.torch.distributed.get_rank()
 
             elif trainer_options.sharded_ddp:
                 dp_model = fairscale.nn.data_parallel.ShardedDataParallel(
@@ -489,7 +490,7 @@ class Trainer:
             s3_dist_path = sagemaker_session.upload_data(output_dir, \
                                                         bucket=s3_output_bucket, \
                                                         key_prefix=os.path.join(s3_output_key,base_output_dir))
-            print(f"data uploaded from {os.listdir(output_dir)} to {s3_dist_path }")
+            print(f"data uploaded from {output_dir} to {s3_dist_path }")
 
     @classmethod
     def train_one_epoch(
