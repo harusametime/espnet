@@ -1859,6 +1859,7 @@ class AbsTask(ABC):
         # distributed_option.init_options()
 
         def is_sagemaker_dp_enabled():
+            import json, os, importlib.util
             # Get the sagemaker specific env variable.
             sagemaker_params = os.getenv("SM_FRAMEWORK_PARAMS", "{}")
             try:
