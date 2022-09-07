@@ -212,7 +212,7 @@ class Trainer:
                 f"The training has already reached at max_epoch: {start_epoch}"
             )
 
-        
+
 
         if distributed_option.distributed:
             if distributed_option.dist_launcher == 'sagemaker':
@@ -485,10 +485,11 @@ class Trainer:
             # To combine them to sagemaker/exp/lm_train_lm_en_bpe30
             # extract basename (the last part of the path) from output dir
             base_output_dir = os.path.basename(output_dir)
+            print(f"data uploaded {os.listdir(output_dir)} under {output_dir} to {s3_dist_path }")
             s3_dist_path = sagemaker_session.upload_data(output_dir, \
                                                         bucket=s3_output_bucket, \
                                                         key_prefix=os.path.join(s3_output_key,base_output_dir))
-            print(f"data uploaded from {output_dir} to {s3_dist_path }")
+
 
     @classmethod
     def train_one_epoch(
