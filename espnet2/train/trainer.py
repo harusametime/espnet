@@ -212,7 +212,7 @@ class Trainer:
                 f"The training has already reached at max_epoch: {start_epoch}"
             )
 
-        print(f"distributed_option: {distributed_option}")
+        
 
         if distributed_option.distributed:
             if distributed_option.dist_launcher == 'sagemaker':
