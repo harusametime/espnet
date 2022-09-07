@@ -478,9 +478,8 @@ class Trainer:
             )
 
         # If s3 output bucket is specified, the output dir is uploaded to S3
-        if trainer_options.s3_output is not None:
+        if trainer_options.s3_output is not None and distributed_option.dist_rank == 0:
             import os
-
             # output_dir is like "exp/lm_train_lm_en_bpe30" and s3_output_key is like sagemaker/exp
             # To combine them to sagemaker/exp/lm_train_lm_en_bpe30
             # extract basename (the last part of the path) from output dir
