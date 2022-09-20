@@ -1019,14 +1019,12 @@ class AbsTask(ABC):
         # "distributed" is decided using the other command args
         resolve_distributed_mode(args)
 
-        # check arg of s3_output to know this run on SageMaker
-        if hasattr(args, 's3_output'):
-            print("run on sagemaker")
+        # check if this runs on SageMaker training job
+        if os.environ.get('SM_TRAINING_ENV') is not None:
             args.ngpu = int(os.environ['SM_NUM_GPUS'])
             cls.sagemaker_worker(args)
 
         elif not args.distributed or not args.multiprocessing_distributed:
-            print("run alone")
             cls.main_worker(args)
 
         else:

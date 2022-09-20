@@ -9,15 +9,13 @@ def get_parser():
 
 
 def main(cmd=None):
-    r"""ASR training.
+    """LM training.
 
     Example:
 
-        % python asr_train.py asr --print_config --optim adadelta \
-                > conf/train_asr.yaml
-        % python asr_train.py --config conf/train_asr.yaml
+        % python lm_train.py asr --print_config --optim adadelta
+        % python lm_train.py --config conf/train_asr.yaml
     """
-    download_nltk()
 
     # Check if this runs in SageMaker based on existence of SageMaker-related file
     sagemaker_hp_json_path  = '/opt/ml/input/config/hyperparameters.json'
