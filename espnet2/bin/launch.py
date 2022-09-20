@@ -94,6 +94,12 @@ def get_parser():
     parser.add_argument("args", type=str, nargs="+")
     return parser
 
+def upload_to_s3(path, sagemaker_config):
+    import os, subprocess
+    dist_s3_path = os.path.join('s3://', sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], path)
+    print(f'File uploaded to {dist_s3_path} by s3 sync' )
+    cmd = f"aws s3 sync {path} {dist_s3_path} --quiet"
+    subprocess.call(cmd.split())
 
 def main(cmd=None):
     logfmt = "%(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s"
@@ -104,22 +110,8 @@ def main(cmd=None):
     args = parser.parse_args(cmd)
     args.cmd = shlex.split(args.cmd)
 
-
     if args.sagemaker_train_config is not None:
 
-        '''
-        INFO: /opt/conda/bin/python3 /root/sagemaker-espnet-studio/espnet/espnet2/bin/launch.py --cmd 'run.pl --name exp/lm_train_lm_en_bpe30/train.log' --log exp/lm_train_lm_en_bpe30/train.log --ngpu 1 --num_nodes 1 --init_file_prefix exp/lm_train_lm_en_bpe30/.dist_init_ --multiprocessing_distributed true --sagemaker_train_config conf/train_sagemaker.yaml -- python3 -m espnet2.bin.lm_train --ngpu 1 --use_preprocessor true
-
-        --bpemodel data/en_token_list/bpe_unigram30/bpe.model
-        --token_type bpe
-        --token_list data/en_token_list/bpe_unigram30/tokens.txt
-        --non_linguistic_symbols none
-        --cleaner none --g2p none
-        --valid_data_path_and_name_and_type dump/raw/train_dev/text,text,text
-        --valid_shape_file exp/lm_stats_en_bpe30/valid/text_shape.bpe
-        --fold_length 150 --resume true
-        --output_dir exp/lm_train_lm_en_bpe30 --config conf/train_lm.yaml --train_data_path_and_name_and_type dump/raw/lm_train.txt,text,text --train_shape_file exp/lm_stats_en_bpe30/train/text_shape.bpe
-        '''
         import sagemaker
         from sagemaker.pytorch import PyTorch
         import yaml
@@ -131,40 +123,48 @@ def main(cmd=None):
             print(e, file=sys.stderr)
             sys.exit(1)
 
+
+        # launch.py receives entrypoint the third item of the args list
+        #  ['python3', '-m', 'espnet2.bin.lm_train']
+        # Extracting the third element and concatenating it with the absolute path
+        entry_point_dir = os.path.dirname(os.path.abspath(__file__))
+        entry_point = os.path.join(entry_point_dir, args.args[2].split('.')[-1] +'.py')
+
+
+        # check task type: lm_train, asr_train, tts_train,...
+        espnet_task = args.args[2].split('.')[-1]
+
+        tts_tasks = ['tts_train', 'gam_tts_train']
+
         '''
         Upload directories to S3
         ./data: model, vocab, token_list
         ./exp: log and shape file
         ./dump: data for training/validation
+        ./downloads: raw data (Required for TTS)
         '''
 
         sagemaker_session = sagemaker.Session()
 
+        s3_data = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'data')
+        s3_exp = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'exp')
+        s3_dump = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'dump')
+        s3_conf = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'conf')
+        s3_downloads = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'downloads')
+
         if sagemaker_config['data_upload']:
             print('Uploading files to S3 ... (This takes a while)')
-            s3_data = sagemaker_session.upload_data(path='data', \
-                                                    bucket=sagemaker_config['s3_bucket'], \
-                                                    key_prefix=os.path.join(sagemaker_config['key_prefix'], 'data'))
-            s3_exp = sagemaker_session.upload_data(path='exp', \
-                                                    bucket=sagemaker_config['s3_bucket'], \
-                                                    key_prefix=os.path.join(sagemaker_config['key_prefix'], 'exp'))
-            s3_dump = sagemaker_session.upload_data(path='dump', \
-                                                    bucket=sagemaker_config['s3_bucket'], \
-                                                    key_prefix=os.path.join(sagemaker_config['key_prefix'], 'dump'))
-            s3_conf = sagemaker_session.upload_data(path='conf', \
-                                                    bucket=sagemaker_config['s3_bucket'], \
-                                                    key_prefix=os.path.join(sagemaker_config['key_prefix'], 'conf'))
+            data_path_list = ['data', 'exp', 'dump', 'conf']
 
-            print('File uploaded to')
-            print('    ' + s3_data)
-            print('    ' + s3_exp)
-            print('    ' + s3_dump)
-            print('    ' + s3_conf)
+            if espnet_task in tts_tasks:
+                data_path_list.append('downloads')
+
+            import multiprocessing
+            from functools import partial
+            with multiprocessing.Pool() as pool:
+                r = pool.map(partial(upload_to_s3, sagemaker_config = sagemaker_config), data_path_list)
+
         else:
-            s3_data = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'data')
-            s3_exp = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'exp')
-            s3_dump = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'dump')
-            s3_conf = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'conf')
 
             print('Re-use data in')
             print('    ' + s3_data)
@@ -172,11 +172,10 @@ def main(cmd=None):
             print('    ' + s3_dump)
             print('    ' + s3_conf)
 
+            if espnet_task in tts_tasks:
+                s3_downloads = os.path.join('s3://',sagemaker_config['s3_bucket'], sagemaker_config['key_prefix'], 'downloads')
+                print('    ' + s3_downloads)
 
-#         ##debug##
-#         from espnet2.tasks.lm import LMTask
-#         LMTask.main(cmd=args.args[3:])
-#         sye.exit()
 
         ## exp directory stores shape files and will store trained model as outcome of training
         ## During training, files under exp directory should be uploaded back to exp directory in S3
@@ -185,27 +184,38 @@ def main(cmd=None):
 
         args.args.extend(["--multiprocessing_distributed", "True"])
 
-        # launch.py receives entrypoint the third item of the args list
-        #  ['python3', '-m', 'espnet2.bin.lm_train']
-        # Extracting the third element and concatenating it with the absolute path
-        entry_point_dir = os.path.dirname(os.path.abspath(__file__))
-        entry_point = os.path.join(entry_point_dir, args.args[2].split('.')[-1] +'.py')
+
+        smddp_enabled = True if sagemaker_config['train_instance_type'] in ['ml.p4d.24xlarge', 'ml.p3.16xlarge', 'ml.p3dn.24xlarge'] else False
 
         # The first three args ['python3', '-m', 'espnet2.bin.lm_train']
         # are not needed for SageMaker, which runs python instead of passing the args.
+
+
         estimator = PyTorch(
             image_uri=sagemaker_config['image_uri'],
-            entry_point=sagemaker_config['entry_point'],
-            #source_dir=sagemaker_config['source_dir'],
+            entry_point=entry_point,
             role=sagemaker_config['role'],
             py_version="py38",
             framework_version="1.11.0",
             instance_count=sagemaker_config['train_instance_count'],
             instance_type=sagemaker_config['train_instance_type'],
-            hyperparameters={"cmd": '"'+str(args.args[3:])+'"'},
+            hyperparameters={"cmd": args.args[3:]}, # need to encapsulate all strings with double quotes for including spaces
+            # Training using the SageMaker data parallel distributed training strategy
+            distribution={ "smdistributed": { "dataparallel": { "enabled": smddp_enabled } } }
+
         )
 
-        estimator.fit({'data':s3_data, 'exp': s3_exp, 'dump': s3_dump, 'conf': s3_conf})
+        if espnet_task in tts_tasks:
+            estimator.fit({'data':s3_data, 'exp': s3_exp, 'dump': s3_dump, 'conf': s3_conf, 'downloads': s3_downloads})
+        else:
+            estimator.fit({'data':s3_data, 'exp': s3_exp, 'dump': s3_dump, 'conf': s3_conf})
+
+        # Download artifact generated in SageMaker
+        print(f"Download files from {s3_exp}")
+        cmd='aws s3 sync ' + s3_exp + ' exp --quiet'
+        print(cmd)
+        popen=subprocess.Popen(cmd, shell=True)
+        popen.wait()
 
         return
 

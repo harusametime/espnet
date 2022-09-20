@@ -981,6 +981,7 @@ if ! "${skip_train}"; then
         # Sagemaker studio notebook has only 64M shared memory so num workers = 0 works
         ${train_cmd} JOB=1:"${_nj}" "${_logdir}"/stats.JOB.log \
             ${python} -m espnet2.bin.${asr_task}_train \
+                --num_workers 0 \
                 --collect_stats true \
                 --use_preprocessor true \
                 --bpemodel "${bpemodel}" \

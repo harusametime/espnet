@@ -41,6 +41,7 @@ gpu_inference=false  # Whether to perform gpu decoding.
 dumpdir=dump         # Directory to dump features.
 expdir=exp           # Directory to save experiments.
 python=python3       # Specify python to execute espnet commands.
+sagemaker_train_config= # Speciify config of Sagemaker Training Job
 
 # Data preparation related
 local_data_opts="" # Options to be passed to local/data.sh.
@@ -645,8 +646,10 @@ if ! "${skip_train}"; then
         # 3. Submit jobs
         log "TTS collect_stats started... log: '${_logdir}/stats.*.log'"
         # shellcheck disable=SC2046,SC2086
+        # Sagemaker studio notebook has only 64M shared memory so num workers = 0 works
         ${train_cmd} JOB=1:"${_nj}" "${_logdir}"/stats.JOB.log \
             ${python} -m "espnet2.bin.${tts_task}_train" \
+                --num_workers 0 \
                 --collect_stats true \
                 --write_collected_feats "${write_collected_feats}" \
                 --use_preprocessor true \
