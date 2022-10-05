@@ -890,6 +890,7 @@ if ! "${skip_train}"; then
             --ngpu "${ngpu}" \
             --num_nodes "${num_nodes}" \
             --init_file_prefix "${tts_exp}"/.dist_init_ \
+            --sagemaker_train_config "${sagemaker_train_config}" \
             --multiprocessing_distributed true -- \
             ${python} -m "espnet2.bin.${tts_task}_train" \
                 --use_preprocessor true \
