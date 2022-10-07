@@ -216,7 +216,8 @@ class Trainer:
 
         if distributed_option.distributed:
             if distributed_option.dist_launcher == 'sagemaker':
-                dp_model = torch.nn.parallel.DistributedDataParallel(model)
+                dp_model = torch.nn.parallel.DistributedDataParallel(model,
+                                        find_unused_parameters=trainer_options.unused_parameters)
                 torch.cuda.set_device(distributed_option.dist_local_rank)
                 dp_model.cuda(distributed_option.dist_local_rank)
 

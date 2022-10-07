@@ -2125,8 +2125,8 @@ class AbsTask(ABC):
             # Don't give args to trainer.run() directly!!!
             # Instead of it, define "Options" object and build here.
             trainer_options = cls.trainer.build_options(args)
-            print(trainer_options,args)
-            trainer_options.unused_parameters = True
+            # print(trainer_options,args)
+            # trainer_options.unused_parameters = True
             cls.trainer.run(
                 model=model,
                 optimizers=optimizers,
