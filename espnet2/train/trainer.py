@@ -213,9 +213,12 @@ class Trainer:
             )
 
 
-
+        print("****Check****")
+        print(distributed_option.distributed)
+        print(distributed_option.dist_launcher)
         if distributed_option.distributed:
             if distributed_option.dist_launcher == 'sagemaker':
+                print(trainer_options)
                 dp_model = torch.nn.parallel.DistributedDataParallel(model,
                                         find_unused_parameters=trainer_options.unused_parameters)
                 torch.cuda.set_device(distributed_option.dist_local_rank)
