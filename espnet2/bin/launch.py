@@ -134,7 +134,7 @@ def main(cmd=None):
         # check task type: lm_train, asr_train, tts_train,...
         espnet_task = args.args[2].split('.')[-1]
 
-        tts_tasks = ['tts_train', 'gam_tts_train']
+        tts_tasks = ['tts_train', 'gan_tts_train']
 
         '''
         Upload directories to S3
